@@ -592,7 +592,7 @@ VERCEL CLI (vercel / vc)                   ⤳ skill: vercel-cli  📖 docs: htt
 │   ⊃ vercel integration remove (uninstall)
 │
 ├── Other
-│   ⊃ vercel logs (view function logs)
+│   ⊃ vercel logs (runtime logs; `vercel logs requests` for CDN requests)
 │   ⊃ vercel inspect (deployment details)
 │   ⊃ vercel domains (manage domains)
 │   ⊃ vercel certs (SSL certificates)
