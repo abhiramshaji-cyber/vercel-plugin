@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { YAML } from "bun";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -10,8 +10,24 @@ import { buildOpenAI } from "../scripts/build-openai";
 const ROOT = resolve(import.meta.dir, "..");
 const hash = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 
+// Source files the package must ship: everything except authoring-only copies and approver lists.
+function runtimeFiles(directory: string, prefix = ""): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    if (["upstream", "overlay.yaml", ".vercel.approvers", ".DS_Store"].includes(entry.name) || entry.name.endsWith(".tmpl")) return [];
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    return entry.isDirectory() ? runtimeFiles(join(directory, entry.name), path) : [path];
+  });
+}
+
 describe("OpenAI submission build", () => {
   let fixture: string;
+  type Config = { excludedSkills: string[]; skillInterfaces: Record<string, Record<string, string>> };
+  const updateConfig = (change: (config: Config) => void) => {
+    const path = join(fixture, "openai/config.json");
+    const config = JSON.parse(readFileSync(path, "utf8")) as Config;
+    change(config);
+    writeFileSync(path, JSON.stringify(config));
+  };
   beforeEach(() => {
     fixture = mkdtempSync(join(tmpdir(), "vercel-openai-test-"));
     for (const entry of ["package.json", ".mcp.json", "vercel.md", "LICENSE", "skills", "agents", "commands", "openai"]) {
@@ -21,20 +37,32 @@ describe("OpenAI submission build", () => {
   afterEach(() => rmSync(fixture, { recursive: true, force: true }));
 
   test("packages runtime files, dotfiles, metadata, and the submission adaptations", () => {
-    mkdirSync(join(fixture, "skills", "nextjs"));
-    writeFileSync(join(fixture, "skills", "nextjs", "SKILL.md"), "excluded framework skill");
+    mkdirSync(join(fixture, "skills", "excluded-skill"));
+    writeFileSync(join(fixture, "skills", "excluded-skill", "SKILL.md"), "---\nname: excluded-skill\ndescription: Excluded skill\n---\n");
+    updateConfig(config => { config.excludedSkills = ["excluded-skill"]; });
     writeFileSync(join(fixture, ".env"), "local data that must not be packaged");
     const sourceSkills = ["deployments-cicd", "vercel-cli", "knowledge-update"];
     const sourceHashes = sourceSkills.map(name => hash(join(fixture, "skills", name, "SKILL.md")));
     const result = buildOpenAI(fixture);
-    expect(result.skills).toBe(33);
-    expect(result.files).toBe(201);
+    const repositorySkills = readdirSync(join(ROOT, "skills"))
+      .filter(name => existsSync(join(ROOT, "skills", name, "SKILL.md"))).sort();
+    expect(repositorySkills).toEqual(expect.arrayContaining(["daemons", "vercel-flags"]));
     const entries = execFileSync("unzip", ["-Z1", result.zip], { encoding: "utf8" }).trim().split("\n");
+    const packagedSkills = entries.flatMap(path => path.match(/^vercel\/skills\/([^/]+)\/SKILL\.md$/)?.[1] ?? []).sort();
+    expect(packagedSkills).toEqual(repositorySkills);
+    expect(result.skills).toBe(repositorySkills.length);
     expect(entries).toHaveLength(result.files);
+    for (const name of repositorySkills) {
+      expect(entries).toContain(`vercel/skills/${name}/agents/openai.yaml`);
+      for (const file of runtimeFiles(join(ROOT, "skills", name))) expect(entries).toContain(`vercel/skills/${name}/${file}`);
+    }
+    expect(readFileSync(join(result.directory, "skills/daemons/agents/openai.yaml"), "utf8")).toBe(
+      'interface:\n  display_name: "Vercel Daemons"\n  short_description: "Run long-running background workers on Vercel"\n',
+    );
     expect(entries).toContain("vercel/.codex-plugin/plugin.json");
     expect(entries).toContain("vercel/.mcp.json");
     expect(entries.every(path => path.startsWith("vercel/"))).toBe(true);
-    expect(entries.some(path => /(?:hooks\/|upstream\/|\.tmpl$|overlay\.yaml$|\.vercel\.approvers$|\.app\.json$|skills\/nextjs\/|\.env$)/.test(path))).toBe(false);
+    expect(entries.some(path => /(?:hooks\/|upstream\/|\.tmpl$|overlay\.yaml$|\.vercel\.approvers$|\.app\.json$|skills\/excluded-skill\/|\.env$)/.test(path))).toBe(false);
     const extracted = join(fixture, "extracted");
     execFileSync("unzip", ["-q", result.zip, "-d", extracted]);
     for (const path of entries) {
@@ -42,6 +70,8 @@ describe("OpenAI submission build", () => {
     }
     const manifest = JSON.parse(readFileSync(join(result.directory, ".codex-plugin/plugin.json"), "utf8"));
     expect(manifest.name).toBe("vercel");
+    expect(manifest.author.name).toBe("Vercel");
+    expect(manifest.interface.developerName).toBe("Vercel");
     expect(manifest).not.toHaveProperty("hooks");
     expect(manifest).not.toHaveProperty("commands");
     expect(manifest).not.toHaveProperty("agents");
@@ -96,5 +126,23 @@ describe("OpenAI submission build", () => {
     writeFileSync(join(skill, "SKILL.md"), "---\nname: new-product\ndescription: New product\n---\n");
     expect(() => buildOpenAI(fixture)).toThrow("Missing OpenAI display metadata for new-product");
     expect(existsSync(join(fixture, "dist/openai"))).toBe(false);
+  });
+
+  test("rejects skill descriptions that Codex would not show in full instead of truncating them", () => {
+    const tooLong = "Authentication integration guidance for Clerk, Descope, and Auth0 setup";
+    updateConfig(config => { config.skillInterfaces.auth.short_description = tooLong; });
+    expect(() => buildOpenAI(fixture)).toThrow("Invalid OpenAI display metadata for auth: short_description must be 25-64 characters (got 71)");
+    updateConfig(config => { config.skillInterfaces.auth.short_description = "Authentication integration guidance for Next...."; });
+    expect(() => buildOpenAI(fixture)).toThrow("Invalid OpenAI display metadata for auth: short_description looks truncated");
+    expect(existsSync(join(fixture, "dist/openai"))).toBe(false);
+  });
+
+  test("accepts metadata for a skill before the skill itself lands", () => {
+    updateConfig(config => {
+      config.skillInterfaces["future-skill"] = { display_name: "Future Skill", short_description: "Metadata that lands before its skill" };
+    });
+    const result = buildOpenAI(fixture);
+    const entries = execFileSync("unzip", ["-Z1", result.zip], { encoding: "utf8" }).trim().split("\n");
+    expect(entries.some(path => path.startsWith("vercel/skills/future-skill/"))).toBe(false);
   });
 });

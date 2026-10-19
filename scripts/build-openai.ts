@@ -37,12 +37,48 @@ function run(command: string, args: string[], cwd: string, input?: string): void
   }
 }
 
+const length = (value: string) => [...value].length;
+
+// Limits from Codex's skill-creator openai.yaml reference and skill interface loader.
+function validateSkillInterface(name: string, fields: Record<string, unknown>): void {
+  const fail = (message: string) => { throw new Error(`Invalid OpenAI display metadata for ${name}: ${message}`); };
+  for (const [key, value] of Object.entries(fields)) {
+    if (!["display_name", "short_description", "default_prompt"].includes(key)) fail(`unsupported field ${key}`);
+    if (typeof value !== "string" || value.trim() !== value || !value) fail(`${key} must be a trimmed, non-empty string`);
+    if (/(?:\.\.\.|…)$/.test(value as string)) fail(`${key} looks truncated`);
+  }
+  const { display_name, short_description, default_prompt } = fields as Record<string, string | undefined>;
+  if (!display_name || length(display_name) > 64) fail("display_name is required and must be at most 64 characters");
+  if (!short_description || length(short_description) < 25 || length(short_description) > 64) {
+    fail(`short_description must be 25-64 characters (got ${short_description ? length(short_description) : 0})`);
+  }
+  if (default_prompt !== undefined && (!default_prompt.includes(`$${name}`) || length(default_prompt) > 1024)) {
+    fail(`default_prompt must mention $${name} and be at most 1024 characters`);
+  }
+}
+
+// Public submission limits from OpenAI's plugin submission field reference.
+function validateManifest(manifest: { author?: { name?: string }; interface: Record<string, unknown> }): void {
+  const { displayName, shortDescription, developerName, defaultPrompt } = manifest.interface as Record<string, unknown>;
+  const fail = (message: string) => { throw new Error(`Invalid OpenAI manifest: ${message}`); };
+  if (!manifest.author?.name || length(manifest.author.name) > 120) fail("author.name is required and must be at most 120 characters");
+  if (typeof displayName !== "string" || !displayName || length(displayName) > 30) fail("interface.displayName must be 1-30 characters");
+  if (typeof shortDescription !== "string" || !shortDescription || length(shortDescription) > 30) fail("interface.shortDescription must be 1-30 characters");
+  if (typeof developerName !== "string" || !developerName || length(developerName) > 80) fail("interface.developerName must be 1-80 characters");
+  const prompts = Array.isArray(defaultPrompt) ? defaultPrompt : [defaultPrompt].filter(Boolean);
+  if (prompts.length > 3 || prompts.some(prompt => typeof prompt !== "string" || length(prompt) > 128)) {
+    fail("interface.defaultPrompt allows at most 3 prompts of at most 128 characters");
+  }
+}
+
 export function buildOpenAI(root = ROOT, output = join(root, "dist", "openai")) {
   const configDir = join(root, "openai");
   const config = JSON.parse(readFileSync(join(configDir, "config.json"), "utf8")) as {
     excludedSkills: string[];
     skillInterfaces: Record<string, Record<string, string>>;
   };
+  // Entries for skills that are not in skills/ yet are allowed so metadata can land before the skill.
+  for (const [name, fields] of Object.entries(config.skillInterfaces)) validateSkillInterface(name, fields);
   const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   if (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(version)) {
     throw new Error("Expected a package version suitable for the submission filename");
@@ -106,6 +142,7 @@ export function buildOpenAI(root = ROOT, output = join(root, "dist", "openai")) 
       }
     }
     const manifest = { ...JSON.parse(readFileSync(join(configDir, "plugin.json"), "utf8")), version };
+    validateManifest(manifest);
     mkdirSync(join(plugin, ".codex-plugin"));
     writeFileSync(join(plugin, ".codex-plugin", "plugin.json"), JSON.stringify(manifest, null, 2) + "\n");
     const mcp = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"));
