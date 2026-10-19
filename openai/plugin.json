@@ -1,6 +1,6 @@
 {
   "author": {
-    "name": "Vercel Labs",
+    "name": "Vercel",
     "url": "https://github.com/vercel"
   },
   "description": "Build and deploy web apps and AI agents on Vercel.",
@@ -18,7 +18,7 @@
       "Which Vercel tools fit this app best",
       "Help connect Vercel to this workflow"
     ],
-    "developerName": "Vercel Labs",
+    "developerName": "Vercel",
     "displayName": "Vercel",
     "logo": "./assets/logo.png",
     "longDescription": "Build and deploy web apps and AI agents on Vercel. Get guidance for Next.js, the AI SDK, Workflow, storage, deployments, and other Vercel products, and use the Vercel MCP connection to inspect and manage projects.",
@@ -37,7 +37,6 @@
     "turbopack",
     "workflow",
     "deployment",
-    "edge-functions",
     "serverless",
     "ai-gateway",
     "chat-sdk",
