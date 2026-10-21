@@ -12,7 +12,7 @@ import { registerOTel } from '@vercel/otel';
 registerOTel({ serviceName: 'checkout' });
 ```
 
-Astro loads `src/middleware.ts` or `src/middleware.js`, and falls back to `src/middleware/index.ts` only when neither exists. Use the file the app already has. Creating `src/middleware.ts` next to `src/middleware/index.ts` stops the existing middleware from loading, with no warning. Import the telemetry module first in that file. The import runs before `next()`, and Node loads the module once per function instance. Import OpenTelemetry's context as `otelContext`. Astro's middleware argument is also named `context`.
+Astro loads `src/middleware.ts` or `src/middleware.js`, and falls back to `src/middleware/index.ts` only when neither exists. Use the file the app already has. Creating `src/middleware.ts` next to `src/middleware/index.ts` stops the existing middleware from loading, with no warning. Import the telemetry module first in that file, as `'../telemetry'` from `src/middleware/index.ts`. The import runs before `next()`, and Node loads the module once per function instance. Import OpenTelemetry's context as `otelContext`. Astro's middleware argument is also named `context`.
 
 ```ts
 import './telemetry';

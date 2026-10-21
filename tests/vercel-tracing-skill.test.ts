@@ -325,6 +325,7 @@ describe("Vercel tracing guidance", () => {
 
     expect(reference).toContain("src/middleware.ts");
     expect(reference).toContain("src/middleware/index.ts");
+    expect(reference).toContain("`'../telemetry'` from `src/middleware/index.ts`");
     expect(reference).toContain("edgeMiddleware: true");
     expect(reference).toContain("if (context.isPrerendered) return next();");
     expect(reference).toContain("otelContext.with(parent, () => next())");
