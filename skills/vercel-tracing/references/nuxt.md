@@ -24,6 +24,6 @@ Put the `measure` helper from [custom spans](custom-spans.md) in `server/utils/m
 
 Keep the default `vercel` preset. It runs on Node.js. Do not set `nitro.preset` to `vercel-edge`. Custom spans need the Node.js runtime. See [custom spans](custom-spans.md). Prerendered routes run no server code. Do not set `isr` or `swr` on a route you need to trace. Nitro 2 maps a `swr` route rule to `isr` on Vercel unless `future.nativeSWR` is set. Vercel serves an ISR cache hit without running the handler.
 
-Nuxt 4 does not ship Nitro 3. Do not set `tracingChannel`.
+Nuxt 4.6's experimental `tracingChannel` emits diagnostics-channel events that `@vercel/otel` does not read. It adds no spans to Vercel traces, so leave it unset.
 
 Deploy the change to preview or production, then verify [collection](collection.md) and exercise a dynamic server-rendered route.

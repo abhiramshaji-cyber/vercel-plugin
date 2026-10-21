@@ -12,7 +12,7 @@ import { registerOTel } from '@vercel/otel';
 registerOTel({ serviceName: 'checkout' });
 ```
 
-Import that module first in `src/middleware.ts`. The import runs before `next()`, and Node loads the module once per function instance. Import OpenTelemetry's context as `otelContext`. Astro's middleware argument is also named `context`.
+Astro loads `src/middleware.ts` or `src/middleware.js`, and falls back to `src/middleware/index.ts` only when neither exists. Use the file the app already has. Creating `src/middleware.ts` next to `src/middleware/index.ts` stops the existing middleware from loading, with no warning. Import the telemetry module first in that file. The import runs before `next()`, and Node loads the module once per function instance. Import OpenTelemetry's context as `otelContext`. Astro's middleware argument is also named `context`.
 
 ```ts
 import './telemetry';
@@ -29,9 +29,9 @@ export const onRequest = defineMiddleware((context, next) => {
 });
 ```
 
-If `src/middleware.ts` already exports `onRequest`, keep that handler and call it inside `otelContext.with`. Do not add `src/fetch.ts` only to register OpenTelemetry. Astro 7 uses that file as the request pipeline.
+If the middleware file already exports `onRequest`, keep that handler and call it inside `otelContext.with`. Do not add `src/fetch.ts` only to register OpenTelemetry. Astro 7 uses that file as the request pipeline.
 
-Leave `middlewareMode` unset. `'edge'` deploys this file as an Edge function, and the Edge runtime does not support custom spans. See [Astro middleware](https://docs.astro.build/en/guides/middleware/) and the [Vercel adapter](https://docs.astro.build/en/guides/integrations-guide/vercel/).
+Leave `middlewareMode` unset and remove `edgeMiddleware: true`. Either `middlewareMode: 'edge'` or the older `edgeMiddleware: true` deploys this file as an Edge function, and the Edge runtime does not support custom spans. See [Astro middleware](https://docs.astro.build/en/guides/middleware/) and the [Vercel adapter](https://docs.astro.build/en/guides/integrations-guide/vercel/).
 
 Traced routes must render on demand. Set `export const prerender = false` on the route, or set `output: 'server'` to server-render every page. Prerendered pages produce no application spans. Middleware also runs while those pages prerender, so return `next()` when `context.isPrerendered` is true. ISR cache hits do not run this middleware, so they produce no application spans.
 

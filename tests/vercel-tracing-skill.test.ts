@@ -137,6 +137,8 @@ describe("Vercel tracing prompt activation", () => {
     "It takes a few seconds to install dependencies.",
     "Write a function that takes 5 seconds to resolve.",
     "The countdown takes 10 seconds before redirecting.",
+    "Build a hotel booking site with Astro.",
+    "Create a Nuxt app for my hotel.",
   ])("does not match words that only contain a trigger term: %s", (prompt) => {
     expect(matchesPrompt(prompt)).toBe(false);
   });
@@ -322,6 +324,8 @@ describe("Vercel tracing guidance", () => {
     const reference = readFileSync(resolve(SKILL_DIR, "references/astro.md"), "utf8");
 
     expect(reference).toContain("src/middleware.ts");
+    expect(reference).toContain("src/middleware/index.ts");
+    expect(reference).toContain("edgeMiddleware: true");
     expect(reference).toContain("if (context.isPrerendered) return next();");
     expect(reference).toContain("otelContext.with(parent, () => next())");
   });
