@@ -331,6 +331,10 @@ describe("Vercel tracing guidance", () => {
     expect(reference).not.toContain("remove `edgeMiddleware: true`");
     expect(reference).toContain("if (context.isPrerendered) return run();");
     expect(reference).not.toContain("if (context.isPrerendered) return next();");
+    expect(reference).toContain("const run = () => existing(context, next)");
+    expect(reference).not.toContain("const run = () => next()");
+    expect(reference).toContain("Rename the current `export const onRequest` to `const existing`");
+    expect(reference).toContain("Do not replace its body");
     expect(reference).toContain("call that handler from `run`");
     expect(reference).toContain("otelContext.with(parent, run)");
     expect(reference).toContain("Do not set `output: 'server'`");
