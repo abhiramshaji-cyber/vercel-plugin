@@ -325,10 +325,16 @@ describe("Vercel tracing guidance", () => {
 
     expect(reference).toContain("src/middleware.ts");
     expect(reference).toContain("src/middleware/index.ts");
-    expect(reference).toContain("`'../telemetry'` from `src/middleware/index.ts`");
-    expect(reference).toContain("edgeMiddleware: true");
-    expect(reference).toContain("if (context.isPrerendered) return next();");
-    expect(reference).toContain("otelContext.with(parent, () => next())");
+    expect(reference).toContain("src/middleware/index.js");
+    expect(reference).toContain("From `src/middleware/index.ts` it is `../telemetry`.");
+    expect(reference).toContain("Leave `middlewareMode` and `edgeMiddleware` as the app set them.");
+    expect(reference).not.toContain("remove `edgeMiddleware: true`");
+    expect(reference).toContain("if (context.isPrerendered) return run();");
+    expect(reference).not.toContain("if (context.isPrerendered) return next();");
+    expect(reference).toContain("call that handler from `run`");
+    expect(reference).toContain("otelContext.with(parent, run)");
+    expect(reference).toContain("Do not set `output: 'server'`");
+    expect(reference).toContain("calls `middleware()` from `astro/fetch`");
   });
 
   test("no framework reference outside the supported set", () => {
